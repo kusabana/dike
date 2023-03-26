@@ -29,29 +29,20 @@ void hooked_run_command( void *self, valve::user_cmd *cmd, void *helper ) {
     return; // original( self, cmd, helper );
   auto *entry = &plugin.store[ self ];
 
-  // TODO: don't hardcode addresses, implement pattern scanning.
   static auto server =
       std::bit_cast< link_map * >( dlopen( "csgo/bin/server.so", RTLD_NOW ) );
 
-  static auto get_fov = std::bit_cast< int ( * )( void * ) >(
-      server->l_addr +
-      toml::find< uintptr_t >( plugin.config.section, "get_fov" ) );
+  static auto get_fov =
+      std::bit_cast< int ( * )( void * ) >( server->l_addr + OFFSET_GET_FOV );
   static auto get_default_fov = std::bit_cast< int ( * )( void * ) >(
-      server->l_addr +
-      toml::find< uintptr_t >( plugin.config.section, "get_default_fov" ) );
+      server->l_addr + OFFSET_GET_DEFAULT_FOV );
   static auto get_distance_adjustment = std::bit_cast< float ( * )( void * ) >(
-      server->l_addr +
-      toml::find< uintptr_t >( plugin.config.section, "get_adjustment" ) );
-
-  static auto is_scoped =
-      toml::find< uintptr_t >( plugin.config.section, "is_scoped" );
-  static auto resume_zoom =
-      toml::find< uintptr_t >( plugin.config.section, "resume_zoom" );
+      server->l_addr + OFFSET_FOV_ADJUST );
 
   const auto scoped = *std::bit_cast< bool * >(
-      std::bit_cast< uintptr_t >( self ) + is_scoped );
+      std::bit_cast< uintptr_t >( self ) + OFFSET_IS_SCOPED );
   const auto is_resuming_zoom = *std::bit_cast< bool * >(
-      std::bit_cast< uintptr_t >( self ) + resume_zoom );
+      std::bit_cast< uintptr_t >( self ) + OFFSET_RESUME_ZOOM );
 
   const auto fov = static_cast< float >( get_fov( self ) );
   const auto default_fov = static_cast< float >( get_default_fov( self ) );
@@ -94,8 +85,7 @@ void hooked_run_command( void *self, valve::user_cmd *cmd, void *helper ) {
       mouse_delta /= distance_adjustment;
 
     float abs_delta = fabsf( mouse_delta );
-    if ( std::clamp( abs_delta, LOWER_THRESHOLD, UPPER_THRESHOLD ) ==
-         abs_delta ) {
+    if ( std::clamp( abs_delta, LOWER_BOUND, UPPER_BOUND ) == abs_delta ) {
       float deviation = std::abs( roundf( mouse_delta ) - mouse_delta );
       if ( deviation > DEVIATION_THRESHOLD ) {
         printf(
@@ -104,39 +94,6 @@ void hooked_run_command( void *self, valve::user_cmd *cmd, void *helper ) {
             deviation * 100,
             DEVIATION_THRESHOLD * 100 );
         entry->last_violation = cmd->number;
-#ifdef DEBUG_DETECTIONS
-        printf( "  DEBUG:\n" );
-        printf( "    delta: %f\n", mouse_delta );
-        printf( "    m_bIsScoped: %i\n", scoped );
-        printf( "    fov: %f\n", ( fov ) );
-        printf( "    default_fov: %f\n", ( default_fov ) );
-        printf( "    resume_zoom: %i\n", ( resume_zoom ) );
-        printf( "    zoomed: %i\n", ( fov != default_fov ) );
-        printf( "    adjustment: %f\n", distance_adjustment );
-        printf( "    number: %d\n", cmd->number );
-        for ( size_t idx = 0; auto const &snapshot : entry->snapshots ) {
-          printf( "  snapshot(%d)\n", idx++ );
-
-          printf( "    cmd #%d\n", snapshot.cmd.number );
-          printf( "      tick_count: %d\n", snapshot.cmd.tick_count );
-          printf(
-              "      x: %f, y: %f, z: %f\n",
-              snapshot.cmd.view[ 0 ],
-              snapshot.cmd.view[ 1 ],
-              snapshot.cmd.view[ 2 ] );
-
-          printf( "      buttons\n" );
-          printf(
-              "        IN_ATTACK: %i\n",
-              snapshot.cmd.buttons & button_flags::IN_ATTACK );
-          printf(
-              "        IN_ATTACK2: %i\n",
-              snapshot.cmd.buttons & button_flags::IN_ATTACK2 );
-          printf( "    fov: %f\n", snapshot.fov );
-          printf( "    zoomed: %i\n", snapshot.zoomed );
-          printf( "    resume_zoom: %i\n", snapshot.resume_zoom );
-        }
-#endif
       }
     }
   }
@@ -166,24 +123,6 @@ auto dike_plugin::load(
     -> bool {
   helpers = new valve::plugin_helpers { std::bit_cast< void * >(
       factory( "ISERVERPLUGINHELPERS001", nullptr ) ) };
-  auto server = std::bit_cast< valve::server_game * >(
-      server_factory( "ServerGameDLL005", nullptr ) );
-
-  config.data = toml::parse( "csgo/addons/dike/config.toml" );
-  if ( server ) {
-    auto sections = toml::find( config.data, "section" );
-    auto descriptor = server->get_game_descriptor( );
-    if ( descriptor ) {
-      config.section = toml::find( sections, descriptor );
-      printf( "dike: found section for descriptor `%s`\n", descriptor );
-      return true;
-    } else {
-      printf( "dike: failed to get game descriptor\n" );
-    }
-  } else {
-    printf( "dike: failed to get server factory `ServerGameDLL005`" );
-  }
-
   return false;
 };
 
@@ -228,9 +167,8 @@ auto dike_plugin::client_loaded( valve::edict *edict ) -> void {
   // but this is the easiest way of getting the vmt pointer
   static bool ran = false;
   if ( !ran ) {
-    auto method = std::bit_cast< void * >(
-        &( ( *std::bit_cast< uintptr_t ** >( edict->unknown ) )
-               [ toml::find< size_t >( config.section, "run_command" ) ] ) );
+    auto method = std::bit_cast< void * >( &( ( *std::bit_cast< uintptr_t ** >(
+        edict->unknown ) )[ RUNCOMMAND_INDEX ] ) );
 
     run_command = std::make_unique< apate::declared >( method );
     run_command->hook( &hooked_run_command );

@@ -5,17 +5,13 @@
 #include "valve.hpp"  // for create_interface, edict (ptr only), cvar_status
 #include <cstddef>    // for size_t
 #include <string>     // for allocator, string
-#include <toml.hpp>
-
-
-#define DEBUG_DETECTIONS
 
 // max amount of deviation from rounded number
 constexpr float DEVIATION_THRESHOLD = 0.25;
-// lower threshold for mouse delta handling
-constexpr float LOWER_THRESHOLD = 0.000001;
-// upper threshold for mouse delta handling
-constexpr float UPPER_THRESHOLD = 128.0;
+// lower bound for mouse delta handling
+constexpr float LOWER_BOUND = 0.000001;
+// upper bound for mouse delta handling
+constexpr float UPPER_BOUND = 128.0;
 
 // TODO: replace with pattern scanning to make game support easy
 constexpr std::size_t RUNCOMMAND_INDEX = 479;
@@ -81,7 +77,6 @@ constexpr std::size_t OFFSET_FOV_ADJUST = 0x7c9530;
 
 /* both offsets are referenced in CWeaponCSBasegun::PrimaryAttack, search
 cycletime_when_zoomed
-
   if ( (_BYTE)v1 )
   {
     if ( *(_BYTE *)(v2 + 5800) )
@@ -113,7 +108,7 @@ class dike_plugin
     , valve::plugin_callbacks::v4 {
 public:
   dike_plugin( ) noexcept
-      : eleos::interface( this, "ISERVERPLUGINCALLBACKS004" ) { };
+      : eleos::interface( "ISERVERPLUGINCALLBACKS004" ) { };
 
   auto description( ) -> const char * override { return "dike"; };
 
@@ -131,11 +126,6 @@ public:
   }
 
 public:
-  struct {
-    toml::value data;
-    toml::value section;
-  } config;
-
   player_store_t store;
   valve::plugin_helpers *helpers;
 };
