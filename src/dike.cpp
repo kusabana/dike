@@ -1,26 +1,27 @@
 #include "dike.hpp"
-#include <algorithm>      // for clamp
-#include <apate.hpp>      // for declared
-#include <bit>            // for bit_cast
-#include <bits/std_abs.h> // for abs
-#include <chrono>         // for seconds
-#include <cmath>          // for fabsf, roundf
-#include <cstdint>        // for uintptr_t
-#include <deque>          // for _Deque_iterator, deque, operator==, _Deque...
-#include <dlfcn.h>        // for dlopen, RTLD_NOW
-#include <elf.h>          // for Elf32_Addr
-#include <future>         // for shared_future, future_status, future_statu...
-#include <iterator>       // for end
-#include <link.h>         // for link_map
-#include <map>            // for map, operator==, _Rb_tree_iterator, _Rb_tr...
-#include <memory>         // for unique_ptr, make_unique, allocator_traits<...
-#include <stdio.h>        // for printf
-#include <thread>         // for thread
-#include <type_traits>    // for remove_reference<>::type
-#include <unordered_map>  // for unordered_map, _Node_iterator, operator==
-#include <utility>        // for move, pair, tuple_element<>::type
-#include <vector>         // for vector
+#include <algorithm>
+#include <apate.hpp>
+#include <bit>
+#include <bits/std_abs.h>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <deque>
+#include <dlfcn.h>
+#include <elf.h>
+#include <future>
+#include <iterator>
+#include <link.h>
+#include <map>
+#include <memory>
+#include <stdio.h>
+#include <thread>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
+// RunCommand hook
 std::unique_ptr< apate::declared > run_command;
 
 void hooked_run_command( void *self, valve::user_cmd *cmd, void *helper ) {
@@ -54,7 +55,7 @@ void hooked_run_command( void *self, valve::user_cmd *cmd, void *helper ) {
   distance_adjustment *= entry->scaling[ scaling_variable::zoom_ratio ];
 
   // process snapshots to check if sensitivity might be variable during current
-  // cmd.
+  // cmd. (HACK - there is 100% a better way to do this)
   if ( ( cmd->buttons & button_flags::IN_ATTACK2 ) ||
        ( cmd->buttons & button_flags::IN_ATTACK ) && zoomed ||
        is_resuming_zoom )
@@ -108,8 +109,8 @@ final:
                    .resume_zoom = is_resuming_zoom } );
 
   // "punishment" system
-  // this sets unsets the IN_ATTACK flag, leading to the player being unable to
-  // attack.
+  // this removes the IN_ATTACK bitflag, leading to attack commands being
+  // ignored
   if ( cmd->number < entry->last_violation + 16 )
     cmd->buttons &= ~button_flags::IN_ATTACK;
 
@@ -119,7 +120,7 @@ final:
 }
 
 auto dike_plugin::load(
-    valve::create_interface factory, valve::create_interface server_factory )
+    valve::factory factory, valve::factory server_factory )
     -> bool {
   helpers = new valve::plugin_helpers { std::bit_cast< void * >(
       factory( "ISERVERPLUGINHELPERS001", nullptr ) ) };
@@ -127,35 +128,31 @@ auto dike_plugin::load(
 };
 
 auto dike_plugin::client_loaded( valve::edict *edict ) -> void {
-  // when a client has loaded into the server we want to query the convars we
-  // need from them, and hook their base entity's runcommand in order to handle
-  // input.
-
-  // convars we need from the client in order to verify their input
-  static std::vector< std::string > convars = {
+  // console variables we need from the client in order to verify their input
+  static std::vector< std::string > console_variables = {
     "sensitivity", "m_yaw", "m_pitch", "zoom_sensitivity_ratio_mouse"
   };
   std::unordered_map< std::string, std::shared_future< std::string > > futures;
-  for ( auto const &convar : convars ) {
-    auto future = helpers->query_convar( edict, convar );
-    futures.insert_or_assign( convar, std::move( future ) );
+  for ( auto const &console_variable : console_variables ) {
+    auto future = helpers->query_console_variable( edict, console_variable );
+    futures.insert_or_assign( console_variable, std::move( future ) );
   }
 
   player_entry_t entry = { };
   std::thread( [ = ]( ) mutable {
-    for ( auto [ convar, future ] : futures ) {
+    for ( auto [ console_variable, future ] : futures ) {
       static std::map< std::string, scaling_variable > lookup = {
         { "sensitivity", scaling_variable::sensitivity },
         { "m_yaw", scaling_variable::yaw },
         { "m_pitch", scaling_variable::pitch },
         { "zoom_sensitivity_ratio_mouse", scaling_variable::zoom_ratio },
       };
-      auto result = future.wait_for( std::chrono::seconds( CONVAR_TIMEOUT ) );
+      auto result = future.wait_for( std::chrono::seconds( FETCH_TIMEOUT ) );
       if ( result != std::future_status::ready )
         return; // assume client isn't sending convars on purpose, we break
                 // out so we dont assign to cache, leading to player commands
                 // being ignored...
-      auto iter = lookup.find( convar );
+      auto iter = lookup.find( console_variable );
       if ( iter != std::end( lookup ) )
         entry.scaling[ iter->second ] = std::stof( future.get( ) );
     }
@@ -163,7 +160,7 @@ auto dike_plugin::client_loaded( valve::edict *edict ) -> void {
     plugin.store.insert_or_assign( edict->unknown, entry );
   } ).detach( );
 
-  // only hook once, this could be done better (for example, in load)
+  // only hook once, this could be done smarter (for example, in load)
   // but this is the easiest way of getting the vmt pointer
   static bool ran = false;
   if ( !ran ) {

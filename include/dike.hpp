@@ -1,11 +1,13 @@
 #pragma once
+#include "eleos.hpp"
+#include "player.hpp"
+#include "valve.hpp"
 
-#include "eleos.hpp"  // for interface
-#include "player.hpp" // for player_store_t
-#include "valve.hpp"  // for create_interface, edict (ptr only), cvar_status
-#include <cstddef>    // for size_t
-#include <string>     // for allocator, string
+#include <cstddef>
+#include <string>
 
+// timeout for fetching the players console variables
+constexpr size_t FETCH_TIMEOUT = 6;
 // max amount of deviation from rounded number
 constexpr float DEVIATION_THRESHOLD = 0.25;
 // lower bound for mouse delta handling
@@ -112,8 +114,7 @@ public:
 
   auto description( ) -> const char * override { return "dike"; };
 
-  auto
-  load( valve::create_interface factory, valve::create_interface /*unused*/ )
+  auto load( valve::factory factory, valve::factory /*unused*/ )
       -> bool override;
   auto client_loaded( valve::edict *edict ) -> void override;
   auto query_cvar_callback(

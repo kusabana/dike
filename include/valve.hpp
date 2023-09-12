@@ -1,15 +1,12 @@
 #pragma once
-
-#include <bit>           // for bit_cast
-#include <future>        // for promise, future, shared_future
-#include <stddef.h>      // for size_t
-#include <stdint.h>      // for uint32_t, uint16_t, uint8_t
-#include <string>        // for string
-#include <type_traits>   // for remove_reference<>::type
-#include <unordered_map> // for unordered_map, _Map_base<>::mapped_type
-#include <utility>       // for move
-
-constexpr size_t CONVAR_TIMEOUT = 6;
+#include <bit>
+#include <future>
+#include <stddef.h>
+#include <stdint.h>
+#include <string>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
 
 namespace valve {
   typedef enum {
@@ -25,7 +22,7 @@ namespace valve {
     status_protected = 3
   } cvar_status;
 
-  using create_interface = void *( * ) ( const char *, int * );
+  using factory = void *( * ) ( const char *, int * );
 
   class server_unknown {
   public:
@@ -50,9 +47,10 @@ namespace valve {
     plugin_helpers( void *instance )
         : instance( instance ) { };
 
-    auto query_convar( edict *entity, std::string convar )
+    auto query_console_variable( edict *entity, std::string console_variable )
         -> std::shared_future< std::string > {
-      const auto cookie = this->internal_query( entity, convar.c_str( ) );
+      const auto cookie =
+          this->internal_query( entity, console_variable.c_str( ) );
       std::promise< std::string > promise;
 
       auto future = promise.get_future( ).share( );
@@ -108,7 +106,7 @@ namespace valve {
     public:
       // called when server loads the plugin
       virtual auto load(
-          valve::create_interface factory, valve::create_interface /*unused*/ )
+          valve::factory factory, valve::factory /*unused*/ )
           -> bool {
         return true;
       }
