@@ -1,6 +1,6 @@
 <div align="center">
-  <h3><a href="https://github.com/ezekielathome">
-    ~ezekielathome/</a>dike – Δίκη ( justice )
+  <h3><a href="https://github.com/kusabana">
+    ~kusabana/</a>dike – Δίκη ( justice )
   </h3>
 source engine plugin to detect view angle manipulation
 </div>
