@@ -119,8 +119,7 @@ final:
       self, cmd, helper );
 }
 
-auto dike_plugin::load(
-    valve::factory factory, valve::factory server_factory )
+auto dike_plugin::load( valve::factory factory, valve::factory server_factory )
     -> bool {
   helpers = new valve::plugin_helpers { std::bit_cast< void * >(
       factory( "ISERVERPLUGINHELPERS001", nullptr ) ) };

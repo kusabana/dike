@@ -105,8 +105,7 @@ namespace valve {
     class v4 {
     public:
       // called when server loads the plugin
-      virtual auto load(
-          valve::factory factory, valve::factory /*unused*/ )
+      virtual auto load( valve::factory factory, valve::factory /*unused*/ )
           -> bool {
         return true;
       }
