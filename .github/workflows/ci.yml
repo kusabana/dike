@@ -26,7 +26,9 @@ jobs:
 
       - name: Move binaries
         run: |
-          cp install/bin/libdike.so plugin/addons/binary.so
+          mkdir -P plugin/addons
+          mv dike.vdf plugins/addons/dike.vdf
+          mv install/bin/libdike.so plugin/addons/binary.so
 
       - name: Compress
         uses: vimtor/action-zip@v1
