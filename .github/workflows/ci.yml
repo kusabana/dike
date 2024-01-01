@@ -26,7 +26,7 @@ jobs:
 
       - name: Move binaries
         run: |
-          mkdir -P plugin/addons
+          mkdir -p plugin/addons
           mv dike.vdf plugins/addons/dike.vdf
           mv install/bin/libdike.so plugin/addons/binary.so
 
